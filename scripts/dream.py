@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """
-Dream — Phase 2 蒸馏脚本 v4.0
+Dream — Phase 2 蒸馏脚本 v5.1
 
-v4.0 核心改进（M-FLOW集成）：
+v5.1 核心改进（skill-evolver 整合）：
+  - GapDetector v2.0：detect_and_generate() 同时返回缺口 + SKILL.md 草稿
+  - generate_skill_draft()：11种能力模板（deep-researcher, image-generator 等）
+  - E6/E8 流程重写：草稿直接写入 ~/SharedSkills/{skill_name}/SKILL.md
   - M-FLOW 倒锥知识图谱：Entity→FacetPoint→Facet→Episode 四层结构
   - Bundle Search 检索替代简单grep：锥尖广撒网→代价传播→最小路径Episode
   - 语义边：边携带描述文本，参与向量检索
@@ -1151,41 +1154,64 @@ def run_skill_extensions(date_str, raw_entries, tagged, all_recall, learnings, p
     print(f"       继续任务: {len(result['tomorrow_plan'].get('continued_tasks', []))}项")
     print(f"       新任务: {len(result['tomorrow_plan'].get('new_tasks', []))}项")
     
-    # 6. 技能缺口检测
-    print("   [E6] 技能缺口检测...")
+    # 6. 技能缺口检测（含 SKILL.md 草稿生成）v2.0
+    print("   [E6] 技能缺口检测（v2.0 + SKILL.md 草稿）...")
     gap_detector = GapDetector(result['work_analysis'], result['skill_scores'], registry.registry)
-    gaps = gap_detector.detect_gaps()
+
+    # v2.0: 使用 detect_and_generate() 同时获取缺口 + 草稿
+    gap_result = gap_detector.detect_and_generate()
+    gaps = gap_result['gaps']
+    skill_drafts = gap_result['drafts']
+    outdated_skills = gap_result.get('outdated_skills', [])
     print(f"       检测到缺口: {len(gaps)}个")
-    
+
     # 7. 技能学习器
     print("   [E7] 技能学习与生成...")
     learner = SkillLearner(result['skill_scores'], registry.registry)
-    
-    # 8. 技能开发（仅当有明确需求时）
-    skill_dev_result = {'created': [], 'improved': [], 'failed': [], 'reasoning': ''}
-    if gaps and len(gaps) > 0:
-        generator = SkillGenerator(registry)
-        
-        # 只处理高优先级的缺口
-        high_priority_gaps = [g for g in gaps if g.get('priority') == 'high']
-        for gap in high_priority_gaps[:2]:  # 最多2个
-            requirements = learner.generate_skill_requirements(
-                gap.get('type', 'general'),
-                gap.get('reason', '')
+
+    # 8. 技能开发（使用 v2.0 SKILL.md 草稿）v2.0
+    skill_dev_result = {'created': [], 'improved': [], 'failed': [], 'reasoning': '', 'drafts': []}
+
+    # v2.0: 先用 generate_skill_draft() 的草稿创建技能
+    for draft_info in skill_drafts[:2]:  # 最多2个
+        skill_name = draft_info.get('name', '')
+        skill_draft = draft_info.get('draft', '')
+        if not skill_name or not skill_draft:
+            continue
+
+        # 保存 SKILL.md 草稿到 SharedSkills
+        SKILLS_OUTPUT = Path.home() / "SharedSkills"
+        skill_path = SKILLS_OUTPUT / skill_name
+        if skill_path.exists():
+            print(f"       跳过（已存在）: {skill_name}")
+            continue
+
+        try:
+            skill_path.mkdir(parents=True, exist_ok=True)
+            (skill_path / "SKILL.md").write_text(skill_draft, encoding='utf-8')
+            # 写入占位脚本
+            (skill_path / "scripts").mkdir(exist_ok=True)
+            (skill_path / "scripts" / "main.py").write_text(
+                f"#! /usr/bin/env python3\n\"\"\"自动生成的 {skill_name} 技能\"\"\"\nprint(\"[{skill_name}] 技能占位脚本，待实现\")\n", encoding='utf-8'
             )
-            req_valid = learner.validate_skill_idea(requirements['name'], requirements)
-            if req_valid.get('feasible', False):
-                gen_result = generator.create_from_gap(gap, requirements)
-                if gen_result.get('success'):
-                    skill_dev_result['created'].append({
-                        'name': requirements['name'],
-                        'description': requirements['description'],
-                        'quality_score': 0,  # 初始评分为0
-                    })
-    
+            skill_dev_result['created'].append({
+                'name': skill_name,
+                'description': draft_info.get('capability', ''),
+                'quality_score': 0,
+                'source': 'auto-generated-draft',
+            })
+            skill_dev_result['drafts'].append({
+                'name': skill_name,
+                'draft': skill_draft,
+            })
+            print(f"       ✅ 创建技能草稿: {skill_name}")
+        except Exception as e:
+            skill_dev_result['failed'].append({'name': skill_name, 'error': str(e)})
+            print(f"       ❌ 创建失败: {skill_name} — {e}")
+
     result['skill_development'] = skill_dev_result
     if skill_dev_result.get('created'):
-        print(f"       新开发技能: {len(skill_dev_result['created'])}个")
+        print(f"       新开发技能（含SKILL.md）: {len(skill_dev_result['created'])}个")
     else:
         print(f"       无需开发新技能")
     

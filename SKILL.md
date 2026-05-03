@@ -25,7 +25,7 @@ metadata:
 
 # Dream Self-improving — 夜间记忆蒸馏与自我进化
 
-> 🧠 **v5.0 技能进化插件** — AI自主学习、用进废退、全自动技能开发 + 完整每日汇报
+> 🧠 **v5.1 技能进化插件** — AI自主学习、用进废退、全自动技能开发 + 完整每日汇报
 
 ## 现状
 
@@ -37,7 +37,49 @@ metadata:
 
 ---
 
-## v5.0 技能进化插件
+## v5.1 技能进化插件（v2.0 大幅增强）
+
+### GapDetector v2.0 — 新增 SKILL.md 草稿自动生成
+
+`extensions/skill_explorer/gap_detector.py` v2.0 整合 skill-evolver 核心逻辑：
+
+| 新增方法 | 功能 |
+|---------|------|
+| `get_active_capabilities()` | 从 `~/.skill_scoreboard/scores.json` 推断用户能力需求 |
+| `scan_shared_skills()` | 扫描 `~/SharedSkills/` 所有技能清单 |
+| `detect_gaps_from_scores()` | 基于评分数据检测能力缺口（比原有任务分析更精准） |
+| `generate_skill_draft()` | 为缺口生成**完整 SKILL.md 草稿**（含触发词、使用场景、步骤、工具） |
+| `detect_and_generate()` | 一次性执行缺口检测 + 草稿生成 + 过时技能扫描 |
+
+**SKILL.md 草稿模板库**（已实现）：
+
+| 能力 | 生成的技能名 | 触发词示例 |
+|------|------------|-----------|
+| 搜索/研究 | `deep-researcher` | 帮我调研、搜索论文 |
+| 图片生成 | `image-generator` | AI画图、生成插画 |
+| 网页抓取 | `web-scraper` | 爬取数据、提取网页内容 |
+| Shell命令 | `shell-automation` | 写脚本、批处理 |
+| Git操作 | `git-assistant` | commit、PR、解决冲突 |
+| 飞书集成 | `feishu-integration` | 飞书文档、飞书消息 |
+| 视频生成 | `video-generator` | 生成视频、AI视频 |
+| 文档总结 | `doc-summarizer` | 总结文档、长文章摘要 |
+| 数据分析 | `data-analyst` | 分析数据、生成图表 |
+| PPT制作 | `ppt-generator` | 制作PPT、演示文稿 |
+| 翻译 | `translator` | 中英互译、润色英文 |
+| 通用 | `{能力英文名}` | 能力名本身 |
+
+**E6/E8 流程更新（dream.py v5.1）**：
+1. `GapDetector.detect_and_generate()` → 同时获取缺口列表 + SKILL.md 草稿
+2. 对每个高优先级缺口 → `generate_skill_draft()` 生成完整草稿
+3. 草稿直接写入 `~/SharedSkills/{skill_name}/SKILL.md`
+4. 同时创建占位脚本 `scripts/main.py`
+5. 草稿内容同步保存到每日汇报的 `skill_development.drafts` 字段
+
+**与 skill-evolver 共用数据源**：`~/.skill_scoreboard/scores.json`
+
+---
+
+## v5.0 技能进化插件（原有架构）
 
 ### 五大扩展模块
 
